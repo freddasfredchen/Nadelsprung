@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fittrack-backend
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      DB_PATH: "/data/fittrack.db"
+      CORS_ORIGIN: "http://localhost:3000"
+    volumes:
+      - fittrack-data:/data
+    networks:
+      - fittrack-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fittrack-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - fittrack-net
+
+volumes:
+  fittrack-data:
+    driver: local
+
+networks:
+  fittrack-net:
+    driver: bridge
