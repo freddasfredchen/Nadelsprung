@@ -1,9 +1,6 @@
-import { db, runMigrations } from "./index";
+import { db } from "./index";
 import { exercises, foodItems, trainingPlans, planDays, planDayExercises, settings } from "./schema";
 
-runMigrations();
-
-// Seed exercises
 const exerciseData = [
   // Chest
   { name: "Bankdrücken", muscleGroup: "Brust", equipment: "Langhantel", isCustom: false },
@@ -66,7 +63,6 @@ const exerciseData = [
   { name: "Hip Thrust", muscleGroup: "Beine", equipment: "Langhantel", isCustom: false },
 ];
 
-// Seed food items
 const foodData = [
   { name: "Hähnchenbrust (gekocht)", caloriesPer100g: 165, protein: 31, carbs: 0, fat: 3.6, isCustom: false },
   { name: "Lachs", caloriesPer100g: 208, protein: 20, carbs: 0, fat: 13, isCustom: false },
@@ -100,104 +96,103 @@ const foodData = [
   { name: "Heidelbeeren", caloriesPer100g: 57, protein: 0.7, carbs: 14, fat: 0.3, isCustom: false },
 ];
 
-const existingExercises = db.select().from(exercises).all();
-if (existingExercises.length === 0) {
-  console.log("Seeding exercises...");
-  db.insert(exercises).values(exerciseData).run();
-}
+export function runSeed() {
+  const existingExercises = db.select().from(exercises).all();
+  if (existingExercises.length === 0) {
+    console.log("Seeding exercises...");
+    db.insert(exercises).values(exerciseData).run();
+  }
 
-const existingFood = db.select().from(foodItems).all();
-if (existingFood.length === 0) {
-  console.log("Seeding food items...");
-  db.insert(foodItems).values(foodData).run();
-}
+  const existingFood = db.select().from(foodItems).all();
+  if (existingFood.length === 0) {
+    console.log("Seeding food items...");
+    db.insert(foodItems).values(foodData).run();
+  }
 
-// Seed default settings
-const defaultSettings = [
-  { key: "calorie_goal", value: "2500" },
-  { key: "protein_goal_g", value: "150" },
-  { key: "carbs_goal_g", value: "300" },
-  { key: "fat_goal_g", value: "80" },
-  { key: "height_cm", value: "175" },
-];
-
-for (const s of defaultSettings) {
-  db.insert(settings).values(s).onConflictDoNothing().run();
-}
-
-// Seed PPL training plan
-const existingPlans = db.select().from(trainingPlans).all();
-if (existingPlans.length === 0) {
-  console.log("Seeding training plan...");
-
-  const [plan] = db
-    .insert(trainingPlans)
-    .values({ name: "PPL – Push Pull Legs", description: "6-Tage Push/Pull/Legs Split für Hypertrophie und Kraft", isActive: true })
-    .returning();
-
-  const allExercises = db.select().from(exercises).all();
-  const byName = (name: string) => allExercises.find((e) => e.name === name)!;
-
-  const days = [
-    { weekday: 0, name: "Push A", exercises: [
-      { name: "Bankdrücken", sets: 4, reps: "6-8" },
-      { name: "Schrägbankdrücken", sets: 3, reps: "8-12" },
-      { name: "Schulterdrücken", sets: 3, reps: "8-12" },
-      { name: "Seitheben", sets: 3, reps: "12-15" },
-      { name: "Trizepsdrücken", sets: 3, reps: "12-15" },
-    ]},
-    { weekday: 1, name: "Pull A", exercises: [
-      { name: "Kreuzheben", sets: 4, reps: "4-6" },
-      { name: "Langhantelrudern", sets: 3, reps: "8-12" },
-      { name: "Latziehen", sets: 3, reps: "10-12" },
-      { name: "Kabelzug-Rudern", sets: 3, reps: "10-12" },
-      { name: "Bizepscurls", sets: 3, reps: "12-15" },
-    ]},
-    { weekday: 2, name: "Legs A", exercises: [
-      { name: "Kniebeuge", sets: 4, reps: "6-8" },
-      { name: "Beinpresse", sets: 3, reps: "10-12" },
-      { name: "Rumänisches Kreuzheben", sets: 3, reps: "8-12" },
-      { name: "Beinbeuger", sets: 3, reps: "12-15" },
-      { name: "Wadenheben", sets: 4, reps: "15-20" },
-    ]},
-    { weekday: 3, name: "Push B", exercises: [
-      { name: "Kurzhantel-Schulterdrücken", sets: 4, reps: "8-12" },
-      { name: "Schrägbankdrücken", sets: 3, reps: "10-12" },
-      { name: "Kabelzug-Fliegende", sets: 3, reps: "12-15" },
-      { name: "Face-Pulls", sets: 3, reps: "15-20" },
-      { name: "Skull Crushers", sets: 3, reps: "10-12" },
-    ]},
-    { weekday: 4, name: "Pull B", exercises: [
-      { name: "Klimmzüge", sets: 4, reps: "6-10" },
-      { name: "Kabelzug-Rudern", sets: 3, reps: "10-12" },
-      { name: "Latziehen", sets: 3, reps: "10-12" },
-      { name: "Hammercurls", sets: 3, reps: "12-15" },
-      { name: "Kabelzug-Curls", sets: 3, reps: "12-15" },
-    ]},
-    { weekday: 5, name: "Legs B", exercises: [
-      { name: "Front Squat", sets: 4, reps: "6-8" },
-      { name: "Hip Thrust", sets: 3, reps: "10-12" },
-      { name: "Ausfallschritte", sets: 3, reps: "10-12" },
-      { name: "Beinstrecker", sets: 3, reps: "12-15" },
-      { name: "Wadenheben", sets: 4, reps: "15-20" },
-    ]},
+  const defaultSettings = [
+    { key: "calorie_goal", value: "2500" },
+    { key: "protein_goal_g", value: "150" },
+    { key: "carbs_goal_g", value: "300" },
+    { key: "fat_goal_g", value: "80" },
+    { key: "height_cm", value: "175" },
   ];
+  for (const s of defaultSettings) {
+    db.insert(settings).values(s).onConflictDoNothing().run();
+  }
 
-  for (const dayData of days) {
-    const [day] = db.insert(planDays).values({ planId: plan.id, weekday: dayData.weekday, name: dayData.name }).returning();
-    for (let i = 0; i < dayData.exercises.length; i++) {
-      const ex = byName(dayData.exercises[i].name);
-      if (ex) {
-        db.insert(planDayExercises).values({
-          planDayId: day.id,
-          exerciseId: ex.id,
-          targetSets: dayData.exercises[i].sets,
-          targetReps: dayData.exercises[i].reps,
-          orderIndex: i,
-        }).run();
+  const existingPlans = db.select().from(trainingPlans).all();
+  if (existingPlans.length === 0) {
+    console.log("Seeding training plan...");
+
+    const [plan] = db
+      .insert(trainingPlans)
+      .values({ name: "PPL – Push Pull Legs", description: "6-Tage Push/Pull/Legs Split für Hypertrophie und Kraft", isActive: true })
+      .returning();
+
+    const allExercises = db.select().from(exercises).all();
+    const byName = (name: string) => allExercises.find((e) => e.name === name);
+
+    const days = [
+      { weekday: 0, name: "Push A", exercises: [
+        { name: "Bankdrücken", sets: 4, reps: "6-8" },
+        { name: "Schrägbankdrücken", sets: 3, reps: "8-12" },
+        { name: "Schulterdrücken", sets: 3, reps: "8-12" },
+        { name: "Seitheben", sets: 3, reps: "12-15" },
+        { name: "Trizepsdrücken", sets: 3, reps: "12-15" },
+      ]},
+      { weekday: 1, name: "Pull A", exercises: [
+        { name: "Kreuzheben", sets: 4, reps: "4-6" },
+        { name: "Langhantelrudern", sets: 3, reps: "8-12" },
+        { name: "Latziehen", sets: 3, reps: "10-12" },
+        { name: "Kabelzug-Rudern", sets: 3, reps: "10-12" },
+        { name: "Bizepscurls", sets: 3, reps: "12-15" },
+      ]},
+      { weekday: 2, name: "Legs A", exercises: [
+        { name: "Kniebeuge", sets: 4, reps: "6-8" },
+        { name: "Beinpresse", sets: 3, reps: "10-12" },
+        { name: "Rumänisches Kreuzheben", sets: 3, reps: "8-12" },
+        { name: "Beinbeuger", sets: 3, reps: "12-15" },
+        { name: "Wadenheben", sets: 4, reps: "15-20" },
+      ]},
+      { weekday: 3, name: "Push B", exercises: [
+        { name: "Kurzhantel-Schulterdrücken", sets: 4, reps: "8-12" },
+        { name: "Schrägbankdrücken", sets: 3, reps: "10-12" },
+        { name: "Kabelzug-Fliegende", sets: 3, reps: "12-15" },
+        { name: "Face-Pulls", sets: 3, reps: "15-20" },
+        { name: "Skull Crushers", sets: 3, reps: "10-12" },
+      ]},
+      { weekday: 4, name: "Pull B", exercises: [
+        { name: "Klimmzüge", sets: 4, reps: "6-10" },
+        { name: "Kabelzug-Rudern", sets: 3, reps: "10-12" },
+        { name: "Latziehen", sets: 3, reps: "10-12" },
+        { name: "Hammercurls", sets: 3, reps: "12-15" },
+        { name: "Kabelzug-Curls", sets: 3, reps: "12-15" },
+      ]},
+      { weekday: 5, name: "Legs B", exercises: [
+        { name: "Front Squat", sets: 4, reps: "6-8" },
+        { name: "Hip Thrust", sets: 3, reps: "10-12" },
+        { name: "Ausfallschritte", sets: 3, reps: "10-12" },
+        { name: "Beinstrecker", sets: 3, reps: "12-15" },
+        { name: "Wadenheben", sets: 4, reps: "15-20" },
+      ]},
+    ];
+
+    for (const dayData of days) {
+      const [day] = db.insert(planDays).values({ planId: plan.id, weekday: dayData.weekday, name: dayData.name }).returning();
+      for (let i = 0; i < dayData.exercises.length; i++) {
+        const ex = byName(dayData.exercises[i].name);
+        if (ex) {
+          db.insert(planDayExercises).values({
+            planDayId: day.id,
+            exerciseId: ex.id,
+            targetSets: dayData.exercises[i].sets,
+            targetReps: dayData.exercises[i].reps,
+            orderIndex: i,
+          }).run();
+        }
       }
     }
   }
-}
 
-console.log("Seeding complete.");
+  console.log("Seeding complete.");
+}

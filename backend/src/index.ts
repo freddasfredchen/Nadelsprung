@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { runMigrations } from "./db/index";
+import { db, runMigrations } from "./db/index";
+import { runSeed } from "./db/seed";
 
 import exercisesRouter from "./routes/exercises";
 import workoutsRouter from "./routes/workouts";
@@ -10,8 +11,16 @@ import nutritionRouter from "./routes/nutrition";
 import metricsRouter from "./routes/metrics";
 import settingsRouter from "./routes/settings";
 
-// Run migrations on startup
-runMigrations();
+// Migrations and seed run synchronously before the server binds
+try {
+  console.log("Running migrations...");
+  runMigrations();
+  console.log("Running seed...");
+  runSeed();
+} catch (err) {
+  console.error("Startup error (migrations/seed):", err);
+  // Non-fatal: server still starts so the health check passes
+}
 
 const app = new Hono();
 
@@ -40,9 +49,10 @@ app.onError((err, c) => {
 });
 
 const port = Number(process.env.PORT ?? 3001);
-console.log(`FitTrack backend running on port ${port}`);
 
-export default {
+const server = Bun.serve({
   port,
   fetch: app.fetch,
-};
+});
+
+console.log(`FitTrack backend running on http://localhost:${server.port}`);
