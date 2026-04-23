@@ -6,14 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import { WEEKDAYS, MUSCLE_GROUPS } from "@/lib/utils";
-import type { TrainingPlan, Exercise } from "@/types";
+import { WEEKDAYS } from "@/lib/utils";
+import type { TrainingPlan } from "@/types";
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<TrainingPlan | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
@@ -21,7 +19,6 @@ export default function PlansPage() {
 
   useEffect(() => {
     api.plans.list().then(setPlans).catch(console.error);
-    api.exercises.list().then(setExercises).catch(console.error);
   }, []);
 
   const loadPlan = async (id: number) => {

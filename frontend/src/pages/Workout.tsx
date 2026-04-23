@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, Trash2, Timer, Save, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { Plus, Trash2, Timer, Save, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { todayISO, MUSCLE_GROUPS } from "@/lib/utils";
