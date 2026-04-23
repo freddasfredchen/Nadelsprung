@@ -14,6 +14,8 @@ import type { NutritionLog, FoodItem, Settings } from "@/types";
 
 const TOOLTIP_STYLE = { background: "hsl(222 47% 13%)", border: "1px solid hsl(216 34% 17%)", borderRadius: 6, fontSize: 12 };
 
+const emptyFree = () => ({ name: "", kcal: "", protein: "", fat: "", carbs: "", sugar: "", fiber: "", salt: "" });
+
 export default function NutritionPage() {
   const [logs, setLogs] = useState<NutritionLog[]>([]);
   const [foods, setFoods] = useState<FoodItem[]>([]);
@@ -21,17 +23,20 @@ export default function NutritionPage() {
   const [weeklyData, setWeeklyData] = useState<{ date: string; totalCalories: number }[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [showAdd, setShowAdd] = useState(false);
+  const [freeMode, setFreeMode] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
   const [mealType, setMealType] = useState<"breakfast" | "lunch" | "dinner" | "snack">("lunch");
   const [amount, setAmount] = useState("100");
+  const [free, setFree] = useState(emptyFree());
 
   const loadLogs = () => api.nutrition.logs.list(selectedDate).then(setLogs).catch(console.error);
+  const reloadWeekly = () => api.nutrition.logs.weekly().then(setWeeklyData).catch(console.error);
 
   useEffect(() => {
     api.nutrition.foods.list().then(setFoods).catch(console.error);
     api.settings.get().then(setSettings).catch(console.error);
-    api.nutrition.logs.weekly().then(setWeeklyData).catch(console.error);
+    reloadWeekly();
   }, []);
 
   useEffect(() => { loadLogs(); }, [selectedDate]);
@@ -46,21 +51,46 @@ export default function NutritionPage() {
   const carbsGoal = Number(settings?.carbs_goal_g ?? 300);
   const fatGoal = Number(settings?.fat_goal_g ?? 80);
 
-  const addLog = async () => {
-    if (!selectedFood) return;
-    await api.nutrition.logs.create({ date: selectedDate, mealType, foodItemId: selectedFood.id, amountG: Number(amount) });
+  const closeDialog = () => {
     setShowAdd(false);
+    setFreeMode(false);
     setSelectedFood(null);
     setAmount("100");
     setSearch("");
+    setFree(emptyFree());
+  };
+
+  const addLog = async () => {
+    if (!selectedFood) return;
+    await api.nutrition.logs.create({ date: selectedDate, mealType, foodItemId: selectedFood.id, amountG: Number(amount) });
+    closeDialog();
     loadLogs();
-    api.nutrition.logs.weekly().then(setWeeklyData);
+    reloadWeekly();
+  };
+
+  const addFreeLog = async () => {
+    if (!free.kcal) return;
+    const food = await api.nutrition.foods.create({
+      name: free.name.trim() || "Freier Eintrag",
+      caloriesPer100g: Number(free.kcal),
+      protein: Number(free.protein) || 0,
+      carbs: Number(free.carbs) || 0,
+      fat: Number(free.fat) || 0,
+      sugarG: free.sugar ? Number(free.sugar) : undefined,
+      fiberG: free.fiber ? Number(free.fiber) : undefined,
+      saltG: free.salt ? Number(free.salt) : undefined,
+    });
+    await api.nutrition.logs.create({ date: selectedDate, mealType, foodItemId: food.id, amountG: 100 });
+    setFoods((prev) => [...prev, food]);
+    closeDialog();
+    loadLogs();
+    reloadWeekly();
   };
 
   const deleteLog = async (id: number) => {
     await api.nutrition.logs.delete(id);
     loadLogs();
-    api.nutrition.logs.weekly().then(setWeeklyData);
+    reloadWeekly();
   };
 
   const filteredFoods = foods.filter((f) => !search || f.name.toLowerCase().includes(search.toLowerCase()));
@@ -68,6 +98,8 @@ export default function NutritionPage() {
     acc[m.value] = logs.filter((l) => l.mealType === m.value);
     return acc;
   }, {});
+
+  const freeNum = (v: string) => (v ? `${v}` : "0");
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -140,7 +172,12 @@ export default function NutritionPage() {
                     <div key={log.id} className="flex items-center justify-between py-1 border-b border-border last:border-0">
                       <div>
                         <p className="text-sm">{log.foodName}</p>
-                        <p className="text-xs text-muted-foreground">{log.amountG}g · P: {calcMacro(log.protein, log.amountG)}g · K: {calcMacro(log.carbs, log.amountG)}g · F: {calcMacro(log.fat, log.amountG)}g</p>
+                        <p className="text-xs text-muted-foreground">
+                          {log.amountG}g · E: {calcMacro(log.protein, log.amountG)}g · KH: {calcMacro(log.carbs, log.amountG)}g · F: {calcMacro(log.fat, log.amountG)}g
+                          {log.sugarG != null && ` · Zucker: ${calcMacro(log.sugarG, log.amountG)}g`}
+                          {log.fiberG != null && ` · Ballaststoffe: ${calcMacro(log.fiberG, log.amountG)}g`}
+                          {log.saltG != null && ` · Salz: ${calcMacro(log.saltG, log.amountG)}g`}
+                        </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium">{calcCalories(log.caloriesPer100g, log.amountG)} kcal</span>
@@ -179,12 +216,29 @@ export default function NutritionPage() {
       </Card>
 
       {/* Add log dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Mahlzeit hinzufügen</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Mode toggle */}
+            <div className="flex gap-1 p-1 bg-secondary rounded-md">
+              <button
+                onClick={() => setFreeMode(false)}
+                className={`flex-1 text-xs py-1.5 rounded transition-colors ${!freeMode ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Lebensmittel suchen
+              </button>
+              <button
+                onClick={() => setFreeMode(true)}
+                className={`flex-1 text-xs py-1.5 rounded transition-colors ${freeMode ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Freies Hinzufügen
+              </button>
+            </div>
+
+            {/* Meal type (shared) */}
             <div className="space-y-2">
               <Label>Mahlzeit</Label>
               <Select value={mealType} onValueChange={(v) => setMealType(v as typeof mealType)}>
@@ -194,38 +248,124 @@ export default function NutritionPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Lebensmittel suchen</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Suchen..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-md p-1">
-                {filteredFoods.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedFood(f)}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFood?.id === f.id ? "bg-primary/10 text-primary" : "hover:bg-secondary"}`}
-                  >
-                    <span className="font-medium">{f.name}</span>
-                    <span className="text-muted-foreground ml-2 text-xs">{f.caloriesPer100g} kcal/100g</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {selectedFood && (
-              <div className="space-y-2">
-                <Label>Menge (g)</Label>
-                <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-                <p className="text-xs text-muted-foreground">
-                  = {calcCalories(selectedFood.caloriesPer100g, Number(amount))} kcal · P: {calcMacro(selectedFood.protein, Number(amount))}g · K: {calcMacro(selectedFood.carbs, Number(amount))}g · F: {calcMacro(selectedFood.fat, Number(amount))}g
-                </p>
+
+            {!freeMode ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Lebensmittel suchen</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Suchen..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1 border border-border rounded-md p-1">
+                    {filteredFoods.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setSelectedFood(f)}
+                        className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFood?.id === f.id ? "bg-primary/10 text-primary" : "hover:bg-secondary"}`}
+                      >
+                        <span className="font-medium">{f.name}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{f.caloriesPer100g} kcal/100g</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {selectedFood && (
+                  <div className="space-y-2">
+                    <Label>Menge (g)</Label>
+                    <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">
+                      = {calcCalories(selectedFood.caloriesPer100g, Number(amount))} kcal · E: {calcMacro(selectedFood.protein, Number(amount))}g · KH: {calcMacro(selectedFood.carbs, Number(amount))}g · F: {calcMacro(selectedFood.fat, Number(amount))}g
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Bezeichnung <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    placeholder="z.B. Mittagessen Restaurant"
+                    value={free.name}
+                    onChange={(e) => setFree((p) => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Brennwert (kcal) <span className="text-destructive">*</span></Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.kcal}
+                      onChange={(e) => setFree((p) => ({ ...p, kcal: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Eiweiß (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.protein}
+                      onChange={(e) => setFree((p) => ({ ...p, protein: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Fett (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.fat}
+                      onChange={(e) => setFree((p) => ({ ...p, fat: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Kohlenhydrate (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.carbs}
+                      onChange={(e) => setFree((p) => ({ ...p, carbs: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5 pl-3 border-l-2 border-border col-span-1">
+                    <Label className="text-muted-foreground text-xs">Davon Zucker (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.sugar}
+                      onChange={(e) => setFree((p) => ({ ...p, sugar: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Ballaststoffe (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.fiber}
+                      onChange={(e) => setFree((p) => ({ ...p, fiber: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Salz (g)</Label>
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={free.salt}
+                      onChange={(e) => setFree((p) => ({ ...p, salt: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                {free.kcal && (
+                  <p className="text-xs text-muted-foreground bg-secondary/50 rounded p-2">
+                    {freeNum(free.kcal)} kcal · E: {freeNum(free.protein)}g · KH: {freeNum(free.carbs)}g · F: {freeNum(free.fat)}g
+                    {free.sugar && ` · Zucker: ${free.sugar}g`}
+                    {free.fiber && ` · Ballaststoffe: ${free.fiber}g`}
+                    {free.salt && ` · Salz: ${free.salt}g`}
+                  </p>
+                )}
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Abbrechen</Button>
-            <Button onClick={addLog} disabled={!selectedFood}>Hinzufügen</Button>
+            <Button variant="outline" onClick={closeDialog}>Abbrechen</Button>
+            {!freeMode ? (
+              <Button onClick={addLog} disabled={!selectedFood}>Hinzufügen</Button>
+            ) : (
+              <Button onClick={addFreeLog} disabled={!free.kcal}>Hinzufügen</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

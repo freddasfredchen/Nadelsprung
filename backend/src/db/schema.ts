@@ -61,6 +61,9 @@ export const foodItems = sqliteTable("food_items", {
   protein: real("protein").notNull(),
   carbs: real("carbs").notNull(),
   fat: real("fat").notNull(),
+  sugarG: real("sugar_g"),
+  fiberG: real("fiber_g"),
+  saltG: real("salt_g"),
   isCustom: integer("is_custom", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });

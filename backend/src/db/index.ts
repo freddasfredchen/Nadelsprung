@@ -111,4 +111,9 @@ export function runMigrations() {
   } catch {
     // Column already exists — safe to ignore
   }
+
+  // Add extended nutrition columns to food_items
+  try { sqlite.exec("ALTER TABLE food_items ADD COLUMN sugar_g REAL;"); } catch { /* already exists */ }
+  try { sqlite.exec("ALTER TABLE food_items ADD COLUMN fiber_g REAL;"); } catch { /* already exists */ }
+  try { sqlite.exec("ALTER TABLE food_items ADD COLUMN salt_g REAL;"); } catch { /* already exists */ }
 }

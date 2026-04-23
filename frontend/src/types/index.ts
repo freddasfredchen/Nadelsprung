@@ -64,6 +64,9 @@ export interface FoodItem {
   protein: number;
   carbs: number;
   fat: number;
+  sugarG?: number | null;
+  fiberG?: number | null;
+  saltG?: number | null;
   isCustom: boolean;
 }
 
@@ -78,6 +81,9 @@ export interface NutritionLog {
   protein: number;
   carbs: number;
   fat: number;
+  sugarG?: number | null;
+  fiberG?: number | null;
+  saltG?: number | null;
 }
 
 export interface BodyMetrics {

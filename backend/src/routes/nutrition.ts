@@ -13,6 +13,9 @@ const foodItemSchema = z.object({
   protein: z.number().min(0),
   carbs: z.number().min(0),
   fat: z.number().min(0),
+  sugarG: z.number().min(0).optional(),
+  fiberG: z.number().min(0).optional(),
+  saltG: z.number().min(0).optional(),
 });
 
 const nutritionLogSchema = z.object({
@@ -68,6 +71,9 @@ router.get("/logs", async (c) => {
       protein: foodItems.protein,
       carbs: foodItems.carbs,
       fat: foodItems.fat,
+      sugarG: foodItems.sugarG,
+      fiberG: foodItems.fiberG,
+      saltG: foodItems.saltG,
     })
     .from(nutritionLogs)
     .innerJoin(foodItems, eq(foodItems.id, nutritionLogs.foodItemId))
