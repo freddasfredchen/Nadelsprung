@@ -20,6 +20,7 @@ export interface WorkoutSet {
 
 export interface Workout {
   id: number;
+  title?: string;
   date: string;
   durationMinutes?: number;
   notes?: string;

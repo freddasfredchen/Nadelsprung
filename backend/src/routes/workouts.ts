@@ -16,6 +16,7 @@ const setSchema = z.object({
 });
 
 const workoutSchema = z.object({
+  title: z.string().max(100).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   durationMinutes: z.number().int().positive().optional(),
   notes: z.string().optional(),

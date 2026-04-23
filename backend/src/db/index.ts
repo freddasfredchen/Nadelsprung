@@ -32,6 +32,7 @@ export function runMigrations() {
 
     CREATE TABLE IF NOT EXISTS workouts (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      title TEXT,
       date TEXT NOT NULL,
       duration_minutes INTEGER,
       notes TEXT,
@@ -103,4 +104,11 @@ export function runMigrations() {
       value TEXT NOT NULL
     );
   `);
+
+  // Add title column to existing databases that predate this field
+  try {
+    sqlite.exec("ALTER TABLE workouts ADD COLUMN title TEXT;");
+  } catch {
+    // Column already exists — safe to ignore
+  }
 }
