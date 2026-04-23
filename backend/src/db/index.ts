@@ -1,15 +1,15 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "bun:sqlite";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import * as schema from "./schema";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 
 const dbPath = process.env.DB_PATH ?? "./fittrack.db";
-const sqlite = new Database(dbPath);
+const sqlite = new Database(dbPath, { create: true });
 
 // Enable WAL mode for better concurrent performance
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+sqlite.exec("PRAGMA journal_mode = WAL;");
+sqlite.exec("PRAGMA foreign_keys = ON;");
 
 export const db = drizzle(sqlite, { schema });
 

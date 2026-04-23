@@ -12,12 +12,10 @@
     "hono": "^4.4.0",
     "@hono/zod-validator": "^0.2.2",
     "drizzle-orm": "^0.31.0",
-    "better-sqlite3": "^9.6.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.22.0",
-    "@types/better-sqlite3": "^7.6.11",
     "bun-types": "latest"
   }
 }
