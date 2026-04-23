@@ -102,6 +102,30 @@ router.get("/heatmap", async (c) => {
   return c.json(rows);
 });
 
+router.get("/last-performance/:exerciseId", async (c) => {
+  const exerciseId = Number(c.req.param("exerciseId"));
+
+  // Find the most recent workout that contained this exercise
+  const rows = await db
+    .select({
+      date: workouts.date,
+      setNumber: workoutSets.setNumber,
+      reps: workoutSets.reps,
+      weightKg: workoutSets.weightKg,
+    })
+    .from(workoutSets)
+    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .where(eq(workoutSets.exerciseId, exerciseId))
+    .orderBy(desc(workouts.date), workoutSets.setNumber);
+
+  if (rows.length === 0) return c.json(null);
+
+  // Only return sets from the single most recent date
+  const lastDate = rows[0].date;
+  const sets = rows.filter((r) => r.date === lastDate);
+  return c.json({ date: lastDate, sets });
+});
+
 router.get("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const [workout] = await db.select().from(workouts).where(eq(workouts.id, id));

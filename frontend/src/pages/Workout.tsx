@@ -26,6 +26,11 @@ interface ExerciseGroup {
   sets: ActiveSet[];
 }
 
+interface LastPerf {
+  date: string;
+  sets: { setNumber: number; reps: number; weightKg: number }[];
+}
+
 export default function WorkoutPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [pastWorkouts, setPastWorkouts] = useState<Workout[]>([]);
@@ -40,10 +45,11 @@ export default function WorkoutPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  // Expand/collapse state for past workouts
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detailCache, setDetailCache] = useState<Record<number, Workout>>({});
   const [loadingDetail, setLoadingDetail] = useState<number | null>(null);
+  // Last performance per exercise id
+  const [lastPerf, setLastPerf] = useState<Record<number, LastPerf | null>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -81,15 +87,21 @@ export default function WorkoutPage() {
       try {
         const detail = await api.workouts.get(id);
         setDetailCache((prev) => ({ ...prev, [id]: detail }));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingDetail(null);
-      }
+      } catch (e) { console.error(e); }
+      finally { setLoadingDetail(null); }
     }
   };
 
-  const addExercise = (ex: Exercise) => {
+  const deleteWorkout = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await api.workouts.delete(id);
+      setPastWorkouts((prev) => prev.filter((w) => w.id !== id));
+      if (expandedId === id) setExpandedId(null);
+    } catch (err) { console.error(err); }
+  };
+
+  const addExercise = async (ex: Exercise) => {
     setActiveGroups((groups) => {
       if (groups.find((g) => g.exerciseId === ex.id)) return groups;
       return [...groups, {
@@ -99,6 +111,13 @@ export default function WorkoutPage() {
         sets: [{ exerciseId: ex.id, exerciseName: ex.name, setNumber: 1, reps: 8, weightKg: 0, notes: "" }],
       }];
     });
+    // Fetch last performance if not cached
+    if (!(ex.id in lastPerf)) {
+      try {
+        const perf = await api.workouts.lastPerformance(ex.id);
+        setLastPerf((prev) => ({ ...prev, [ex.id]: perf }));
+      } catch { /* silently ignore */ }
+    }
   };
 
   const addSet = (exerciseId: number) => {
@@ -152,12 +171,10 @@ export default function WorkoutPage() {
       setActiveGroups([]);
       setWorkoutTitle("");
       setWorkoutNotes("");
+      setLastPerf({});
       api.workouts.list({ limit: 20 }).then(setPastWorkouts);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
   };
 
   const filteredExercises = exercises.filter((e) => {
@@ -166,7 +183,6 @@ export default function WorkoutPage() {
     return matchMuscle && matchSearch;
   });
 
-  // Group sets by exercise for the detail view
   const groupSets = (workout: Workout) => {
     const map = new Map<string, { name: string; sets: WorkoutSet[] }>();
     for (const s of workout.sets ?? []) {
@@ -176,6 +192,9 @@ export default function WorkoutPage() {
     }
     return Array.from(map.values());
   };
+
+  const formatPerf = (perf: LastPerf) =>
+    perf.sets.map((s) => `${s.reps}×${s.weightKg} kg`).join("  ·  ");
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -207,7 +226,6 @@ export default function WorkoutPage() {
       {/* Active workout */}
       {activeGroups.length > 0 && (
         <div className="space-y-4">
-          {/* Title input at the top */}
           <div className="space-y-2">
             <Label htmlFor="workout-title">Titel</Label>
             <Input
@@ -218,54 +236,62 @@ export default function WorkoutPage() {
             />
           </div>
 
-          {activeGroups.map((group) => (
-            <Card key={group.exerciseId}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">{group.exerciseName}</CardTitle>
-                    <Badge variant="outline" className="mt-1 text-xs">{group.muscleGroup}</Badge>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => removeExercise(group.exerciseId)}>
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground px-1">
-                  <span>Satz</span><span>Wdh</span><span>Gewicht (kg)</span><span></span>
-                </div>
-                {group.sets.map((set, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-2 items-center">
-                    <span className="text-sm text-muted-foreground pl-1">{set.setNumber}</span>
-                    <Input
-                      type="number" min={1} value={set.reps}
-                      onChange={(e) => updateSet(group.exerciseId, i, "reps", Number(e.target.value))}
-                      className="h-8 text-center"
-                    />
-                    <Input
-                      type="number" min={0} step={0.5} value={set.weightKg}
-                      onChange={(e) => updateSet(group.exerciseId, i, "weightKg", Number(e.target.value))}
-                      className="h-8 text-center"
-                    />
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8"
-                        onClick={() => { setRestTimer(90); removeSet(group.exerciseId, i); }}>
-                        <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8"
-                        onClick={() => removeSet(group.exerciseId, i)}>
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
+          {activeGroups.map((group) => {
+            const perf = lastPerf[group.exerciseId];
+            return (
+              <Card key={group.exerciseId}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-base">{group.exerciseName}</CardTitle>
+                      <Badge variant="outline" className="mt-1 text-xs">{group.muscleGroup}</Badge>
+                      {/* Last performance hint */}
+                      {perf && perf.sets.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Zuletzt ({formatDate(perf.date)}): <span className="text-foreground">{formatPerf(perf)}</span>
+                        </p>
+                      )}
+                      {perf === null && (
+                        <p className="text-xs text-muted-foreground mt-1.5">Erste Aufzeichnung für diese Übung</p>
+                      )}
                     </div>
+                    <Button variant="ghost" size="icon" onClick={() => removeExercise(group.exerciseId)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
                   </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => addSet(group.exerciseId)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Satz hinzufügen
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground px-1">
+                    <span>Satz</span><span>Wdh</span><span>Gewicht (kg)</span><span></span>
+                  </div>
+                  {group.sets.map((set, i) => (
+                    <div key={i} className="grid grid-cols-4 gap-2 items-center">
+                      <span className="text-sm text-muted-foreground pl-1">{set.setNumber}</span>
+                      <Input type="number" min={1} value={set.reps}
+                        onChange={(e) => updateSet(group.exerciseId, i, "reps", Number(e.target.value))}
+                        className="h-8 text-center" />
+                      <Input type="number" min={0} step={0.5} value={set.weightKg}
+                        onChange={(e) => updateSet(group.exerciseId, i, "weightKg", Number(e.target.value))}
+                        className="h-8 text-center" />
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => { setRestTimer(90); removeSet(group.exerciseId, i); }}>
+                          <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => removeSet(group.exerciseId, i)}>
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => addSet(group.exerciseId)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Satz hinzufügen
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
 
           <div className="space-y-2">
             <Label htmlFor="workout-notes">Notizen</Label>
@@ -325,33 +351,37 @@ export default function WorkoutPage() {
 
                 return (
                   <div key={w.id} className="border border-border rounded-md overflow-hidden">
-                    {/* Header row — click to expand */}
                     <button
                       className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/50 transition-colors"
                       onClick={() => toggleExpand(w.id)}
                     >
-                      <div className="flex items-center gap-3 text-left">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {w.title ?? `Workout vom ${formatDate(w.date)}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(w.date)}
-                            {w.durationMinutes ? ` · ${w.durationMinutes} min` : ""}
-                          </p>
-                        </div>
+                      <div className="text-left">
+                        <p className="text-sm font-medium">
+                          {w.title ?? `Workout vom ${formatDate(w.date)}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(w.date)}
+                          {w.durationMinutes ? ` · ${w.durationMinutes} min` : ""}
+                        </p>
                       </div>
-                      {isOpen
-                        ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                        : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+                      <div className="flex items-center gap-1">
+                        {/* Delete button — stopPropagation prevents expand toggle */}
+                        <button
+                          onClick={(e) => deleteWorkout(e, w.id)}
+                          className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Workout löschen"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                        {isOpen
+                          ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-1" />
+                          : <ChevronDown className="h-4 w-4 text-muted-foreground ml-1" />}
+                      </div>
                     </button>
 
-                    {/* Expanded detail */}
                     {isOpen && (
                       <div className="border-t border-border px-4 py-3 space-y-3 bg-secondary/20">
-                        {isLoading && (
-                          <p className="text-xs text-muted-foreground">Lade Details…</p>
-                        )}
+                        {isLoading && <p className="text-xs text-muted-foreground">Lade Details…</p>}
                         {!isLoading && groups.length === 0 && (
                           <p className="text-xs text-muted-foreground">Keine Sets aufgezeichnet</p>
                         )}

@@ -46,6 +46,10 @@ export const api = {
       ),
     volumeHistory: (period: number) => request<{ week: string; totalVolume: number; workoutCount: number }[]>(`/workouts/volume/history?period=${period}`),
     heatmap: () => request<{ date: string; count: number }[]>("/workouts/heatmap"),
+    lastPerformance: (exerciseId: number) =>
+      request<{ date: string; sets: { setNumber: number; reps: number; weightKg: number }[] } | null>(
+        `/workouts/last-performance/${exerciseId}`
+      ),
   },
 
   plans: {
